@@ -1,5 +1,5 @@
-import {StyleSheet, ScrollView, View, Text} from 'react-native';
-import {useEffect, useState, useContext} from 'react';
+import {StyleSheet, ScrollView, View, Text, TouchableOpacity} from 'react-native';
+import {useEffect, useState, useContext, useCallback} from 'react';
 import serverIP from '../../../Global';
 import Spinner from '../../utils/Spinner';
 import Card from '../Card/Card';
@@ -8,52 +8,60 @@ import {AppContext} from '../../utils/AppContext';
 const MainWindow = () => {
   const [isLoading, setIsLoading] = useState(true);
   const [books, setBooks] = useState([]);
-  const [error, setError] = useState(false);
+  const [error, setError] = useState(null);
   const {isActionDone} = useContext(AppContext);
 
-  const getAllBooks = async () => {
+  const getAllBooks = useCallback(async () => {
     try {
+      setIsLoading(true);
+      setError(null);
+      
       const response = await fetch(`${serverIP}/books/`, {
         method: 'GET',
         headers: {
           'Content-Type': 'application/json',
         },
       });
-      if (response.status !== 200) {
-        setError(true);
-      } else {
-        const data = await response.json();
-        setBooks(data.data);
-        if (data.data !== undefined) {
-          setIsLoading(false);
-        }
+      
+      const data = await response.json();
+      
+      if (!response.ok || data.status !== 'Success') {
+        throw new Error(data.message || 'Error al obtener los libros');
       }
-    } catch (error) {
-      setError(true);
+      
+      setBooks(data.data || []);
+      setIsLoading(false);
+    } catch (err) {
+      console.error('Error obteniendo libros:', err);
+      setError(err.message || 'Error al obtener los libros. Por favor, intenta de nuevo.');
+      setIsLoading(false);
     }
-  };
-
-  useEffect(() => {
-    getAllBooks();
   }, []);
 
   useEffect(() => {
     getAllBooks();
-  }, [isActionDone]);
+  }, [getAllBooks, isActionDone]);
+
+  const handleRetry = () => {
+    getAllBooks();
+  };
 
   return (
     <View style={styles.main}>
       <ScrollView contentContainerStyle={styles.mainWindow}>
         {error ? (
-          <Text style={{marginTop: 40, fontSize: 17, marginHorizontal: 50}}>
-            There was an error getting the books, please try again later.
-          </Text>
+          <View style={styles.errorContainer}>
+            <Text style={styles.errorText}>{error}</Text>
+            <TouchableOpacity style={styles.retryButton} onPress={handleRetry}>
+              <Text style={styles.retryButtonText}>Reintentar</Text>
+            </TouchableOpacity>
+          </View>
         ) : isLoading ? (
           <Spinner />
         ) : books.length === 0 ? (
           <Card
-            name="No books available"
-            author="Add one using the add button"
+            name="No hay libros disponibles"
+            author="Agrega uno usando el botón Add"
             imageUrl=""
             id=""
             updateBooks={getAllBooks}
@@ -84,6 +92,29 @@ const styles = StyleSheet.create({
     width: '100%',
     alignItems: 'center',
     backgroundColor: '#4e6676',
+    paddingBottom: 20,
+  },
+  errorContainer: {
+    marginTop: 40,
+    paddingHorizontal: 50,
+    alignItems: 'center',
+  },
+  errorText: {
+    fontSize: 17,
+    color: '#fff',
+    textAlign: 'center',
+    marginBottom: 20,
+  },
+  retryButton: {
+    backgroundColor: '#E1B16C',
+    paddingHorizontal: 20,
+    paddingVertical: 10,
+    borderRadius: 5,
+  },
+  retryButtonText: {
+    color: '#fff',
+    fontSize: 16,
+    fontWeight: 'bold',
   },
 });
 

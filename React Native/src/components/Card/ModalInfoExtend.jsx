@@ -5,6 +5,7 @@ import {
   Image,
   TouchableOpacity,
   Modal,
+  ScrollView,
 } from 'react-native';
 
 const ModalInfoExtend = ({
@@ -27,21 +28,27 @@ const ModalInfoExtend = ({
       <View style={styles.blurBackground} />
       <View style={styles.centeredView}>
         <View style={styles.modalView}>
-          {imageUrl && (
-            <Image
-              source={{uri: imageUrl}}
-              style={styles.img}
-              resizeMode="contain"
-            />
-          )}
-          <Text style={styles.title}>{name}</Text>
-          <Text style={styles.author}>{author}</Text>
-          <Text style={styles.year}>Published in {year}</Text>
-          <Text style={styles.description}>{description}</Text>
+          <ScrollView
+            contentContainerStyle={styles.scrollContent}
+            showsVerticalScrollIndicator={false}>
+            {imageUrl && (
+              <Image
+                source={{uri: imageUrl}}
+                style={styles.img}
+                resizeMode="contain"
+              />
+            )}
+            <Text style={styles.title}>{name || 'Sin título'}</Text>
+            <Text style={styles.author}>{author || 'Autor desconocido'}</Text>
+            {year && <Text style={styles.year}>Publicado en {year}</Text>}
+            {description && (
+              <Text style={styles.description}>{description}</Text>
+            )}
+          </ScrollView>
           <TouchableOpacity
             style={styles.closeButton}
-            onPress={() => setModalVisible(!modalVisible)}>
-            <Text style={styles.textStyle}>Close</Text>
+            onPress={() => setModalVisible(false)}>
+            <Text style={styles.textStyle}>Cerrar</Text>
           </TouchableOpacity>
         </View>
       </View>
@@ -66,15 +73,21 @@ const styles = StyleSheet.create({
   modalView: {
     backgroundColor: '#2E2D33',
     width: '95%',
+    maxWidth: 500,
     borderRadius: 20,
     padding: 30,
     alignItems: 'center',
+    maxHeight: '90%',
+  },
+  scrollContent: {
+    alignItems: 'center',
   },
   closeButton: {
-    backgroundColor: '#F194FF',
+    backgroundColor: '#E1B16C',
     borderRadius: 20,
-    padding: 10,
+    padding: 12,
     marginTop: 15,
+    minWidth: 100,
   },
   textStyle: {
     color: 'white',
@@ -90,17 +103,27 @@ const styles = StyleSheet.create({
     fontWeight: 'bold',
     marginTop: 10,
     marginBottom: 15,
+    color: '#fff',
+    textAlign: 'center',
   },
   author: {
     fontSize: 20,
     marginBottom: 15,
+    color: '#E1B16C',
+    textAlign: 'center',
   },
   year: {
     fontSize: 19,
     marginBottom: 15,
+    color: '#ADADAC',
+    textAlign: 'center',
   },
   description: {
     fontSize: 16,
+    color: '#fff',
+    textAlign: 'justify',
+    lineHeight: 24,
+    marginBottom: 10,
   },
   img: {
     width: 200,

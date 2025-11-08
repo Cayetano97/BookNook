@@ -1,4 +1,4 @@
-import {useState} from 'react';
+import {useState, useCallback} from 'react';
 import {
   View,
   Text,
@@ -6,6 +6,7 @@ import {
   Image,
   TouchableOpacity,
   Modal,
+  Alert as RNAlert,
 } from 'react-native';
 import serverIP from '../../../Global';
 import ModalInfoExtend from './ModalInfoExtend';
@@ -15,49 +16,95 @@ const Card = ({author, name, imageUrl, id, updateBooks}) => {
   const [modalVisible, setModalVisible] = useState(false);
   const [extendInfo, setExtendInfo] = useState(false);
   const [editModalVisible, setEditModalVisible] = useState(false);
-  const [bookInfo, setBookInfo] = useState(undefined);
-  const [isLoading, setIsLoading] = useState(true);
+  const [bookInfo, setBookInfo] = useState(null);
+  const [isLoadingBookInfo, setIsLoadingBookInfo] = useState(false);
 
-  const deleteBook = async id => {
-    try {
-      const response = await fetch(`${serverIP}/books/${id}`, {
-        method: 'DELETE',
-        headers: {
-          'Content-Type': 'application/json',
+  const deleteBook = useCallback(async (bookId) => {
+    RNAlert.alert(
+      'Eliminar Libro',
+      '¿Estás seguro de que deseas eliminar este libro?',
+      [
+        {
+          text: 'Cancelar',
+          style: 'cancel',
         },
-      });
-      if (response.status !== 200) {
-        console.log('Error deleting book');
-      } else {
-        updateBooks();
-      }
-    } catch (error) {
-      console.log('Error deleting book', error);
-    }
-  };
+        {
+          text: 'Eliminar',
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              const response = await fetch(`${serverIP}/books/${bookId}`, {
+                method: 'DELETE',
+                headers: {
+                  'Content-Type': 'application/json',
+                },
+              });
 
-  const extendInfoModal = async id => {
+              const data = await response.json();
+
+              if (!response.ok || data.status !== 'Success') {
+                throw new Error(data.message || 'Error al eliminar el libro');
+              }
+
+              updateBooks();
+            } catch (error) {
+              console.error('Error eliminando libro:', error);
+              RNAlert.alert('Error', 'No se pudo eliminar el libro. Por favor, intenta de nuevo.');
+            }
+          },
+        },
+      ]
+    );
+  }, [updateBooks]);
+
+  const fetchBookInfo = useCallback(async (bookId) => {
+    setIsLoadingBookInfo(true);
     try {
-      const response = await fetch(`${serverIP}/books/${id}`, {
+      const response = await fetch(`${serverIP}/books/${bookId}`, {
         method: 'GET',
         headers: {
           'Content-Type': 'application/json',
         },
       });
-      if (response.status !== 200) {
-        console.log('Error getting book info');
-      } else {
-        const data = await response.json();
-        setBookInfo(data);
-        setIsLoading(false);
-        if (bookInfo !== undefined) {
-          setExtendInfo(true);
-        }
+
+      const data = await response.json();
+
+      if (!response.ok || data.status !== 'Success') {
+        throw new Error(data.message || 'Error al obtener la información del libro');
       }
+
+      setBookInfo(data.data);
+      return data.data;
     } catch (error) {
-      console.log('Error getting book info', error);
+      console.error('Error obteniendo información del libro:', error);
+      RNAlert.alert('Error', 'No se pudo cargar la información del libro.');
+      return null;
+    } finally {
+      setIsLoadingBookInfo(false);
     }
-  };
+  }, []);
+
+  const handleExtendInfo = useCallback(async () => {
+    if (!bookInfo) {
+      const info = await fetchBookInfo(id);
+      if (info) {
+        setExtendInfo(true);
+      }
+    } else {
+      setExtendInfo(true);
+    }
+  }, [bookInfo, id, fetchBookInfo]);
+
+  const handleEdit = useCallback(async () => {
+    if (!bookInfo) {
+      const info = await fetchBookInfo(id);
+      if (info) {
+        setEditModalVisible(true);
+      }
+    } else {
+      setEditModalVisible(true);
+    }
+  }, [bookInfo, id, fetchBookInfo]);
 
   return (
     <View style={styles.card}>
@@ -84,43 +131,25 @@ const Card = ({author, name, imageUrl, id, updateBooks}) => {
       </View>
       <View style={styles.TextView}>
         <View style={styles.titleView}>
-          <TouchableOpacity onPress={() => extendInfoModal(id)}>
-            <Text style={styles.title}>{name}</Text>
+          <TouchableOpacity onPress={handleExtendInfo}>
+            <Text style={styles.title}>{name || 'Sin título'}</Text>
           </TouchableOpacity>
-          <Text style={styles.author}>{author}</Text>
+          <Text style={styles.author}>{author || 'Autor desconocido'}</Text>
         </View>
         <View style={styles.buttons}>
           <TouchableOpacity
-            onPress={() => setEditModalVisible(true)}
-            style={{
-              ...styles.button,
-              backgroundColor: 'white',
-              alignItems: 'center',
-            }}>
-            <Text
-              style={{
-                color: 'black',
-                fontSize: 16,
-                fontWeight: 'bold',
-              }}>
-              Edit
+            onPress={handleEdit}
+            style={[styles.button, styles.editButton]}
+            disabled={isLoadingBookInfo}>
+            <Text style={styles.editButtonText}>
+              {isLoadingBookInfo ? 'Cargando...' : 'Editar'}
             </Text>
           </TouchableOpacity>
           <TouchableOpacity
             onPress={() => deleteBook(id)}
-            style={{
-              ...styles.button,
-              backgroundColor: 'red',
-              alignItems: 'center',
-            }}>
-            <Text
-              style={{
-                color: 'white',
-                fontSize: 16,
-                fontWeight: 'bold',
-              }}>
-              Delete
-            </Text>
+            style={[styles.button, styles.deleteButton]}
+            disabled={isLoadingBookInfo}>
+            <Text style={styles.deleteButtonText}>Eliminar</Text>
           </TouchableOpacity>
         </View>
       </View>
@@ -143,39 +172,38 @@ const Card = ({author, name, imageUrl, id, updateBooks}) => {
         </View>
       </Modal>
       <Modal
-        animationType="none"
+        animationType="slide"
         transparent={true}
         visible={extendInfo}
-        onRequestClose={() => {
-          setExtendInfo(!extendInfo);
-        }}>
-        {isLoading ? (
-          <Text></Text>
-        ) : (
+        onRequestClose={() => setExtendInfo(false)}>
+        {bookInfo ? (
           <ModalInfoExtend
-            author={author}
-            description={bookInfo.data.description}
-            name={name}
-            year={bookInfo.data.publication_year}
-            imageUrl={imageUrl}
+            author={bookInfo.author || author}
+            description={bookInfo.description || ''}
+            name={bookInfo.name || name}
+            year={bookInfo.publication_year || ''}
+            imageUrl={bookInfo.cover || imageUrl}
             modalVisible={extendInfo}
             setModalVisible={setExtendInfo}
           />
-        )}
+        ) : null}
       </Modal>
 
-      <Modal animationType="none" transparent={true} visible={editModalVisible}>
-        {isLoading ? (
-          <Text></Text>
-        ) : (
+      <Modal
+        animationType="slide"
+        transparent={true}
+        visible={editModalVisible}
+        onRequestClose={() => setEditModalVisible(false)}>
+        {bookInfo ? (
           <EditCard
-            author={author}
-            description={bookInfo.data.description}
-            name={name}
-            year={bookInfo.data.publication_year}
-            imageUrl={imageUrl}
+            author={bookInfo.author || author}
+            description={bookInfo.description || ''}
+            name={bookInfo.name || name}
+            year={bookInfo.publication_year || ''}
+            imageUrl={bookInfo.cover || imageUrl}
             id={id}
             onBookUpdated={() => {
+              setBookInfo(null); // Limpiar cache
               updateBooks();
               setEditModalVisible(false);
             }}
@@ -183,7 +211,7 @@ const Card = ({author, name, imageUrl, id, updateBooks}) => {
               setEditModalVisible(false);
             }}
           />
-        )}
+        ) : null}
       </Modal>
     </View>
   );
@@ -198,6 +226,7 @@ const styles = StyleSheet.create({
   author: {
     color: '#ddd',
     fontSize: 17,
+    marginTop: 5,
   },
   blurBackground: {
     backgroundColor: 'rgba(0, 0, 0, 0.7)',
@@ -212,12 +241,30 @@ const styles = StyleSheet.create({
     borderRadius: 5,
     flex: 0.4,
     marginTop: 5,
-    padding: 5,
+    padding: 8,
+    justifyContent: 'center',
+  },
+  editButton: {
+    backgroundColor: 'white',
+  },
+  editButtonText: {
+    color: 'black',
+    fontSize: 16,
+    fontWeight: 'bold',
+  },
+  deleteButton: {
+    backgroundColor: '#d32f2f',
+  },
+  deleteButtonText: {
+    color: 'white',
+    fontSize: 16,
+    fontWeight: 'bold',
   },
   buttons: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     marginVertical: 5,
+    gap: 10,
   },
   card: {
     backgroundColor: '#2C2E3B',
@@ -229,15 +276,12 @@ const styles = StyleSheet.create({
     marginVertical: 10,
     padding: 10,
     width: '90%',
+    minHeight: 140,
   },
   img: {
     height: 120,
     width: 90,
-  },
-  ImageView: {
-    flex: 2,
-    justifyContent: 'center',
-    width: '40%',
+    borderRadius: 5,
   },
   TextView: {
     flexDirection: 'column',
